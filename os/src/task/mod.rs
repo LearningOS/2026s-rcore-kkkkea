@@ -14,9 +14,10 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
+use crate::config::{MAX_APP_NUM, SYS_CALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use crate::syscall::{SYSCALL_EXIT, SYSCALL_GET_TIME, SYSCALL_TRACE, SYSCALL_WRITE, SYSCALL_YIELD};
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -43,8 +44,44 @@ pub struct TaskManager {
 pub struct TaskManagerInner {
     /// task list
     tasks: [TaskControlBlock; MAX_APP_NUM],
+    /// syscall records
+    records: [SyscallRecord; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
+}
+
+#[derive(Clone, Copy)]
+struct SyscallRecord {
+    record: [usize; SYS_CALL_NUM + 1],
+}
+
+impl SyscallRecord {
+    fn new() -> Self {
+        SyscallRecord {
+            record: [0; SYS_CALL_NUM + 1],
+        }
+    }
+
+    fn syscall_id_to_index(syscall_id: usize) -> usize {
+        match syscall_id {
+            SYSCALL_EXIT => 0,
+            SYSCALL_GET_TIME => 1,
+            SYSCALL_TRACE => 2,
+            SYSCALL_WRITE => 3,
+            SYSCALL_YIELD => 4,
+            _ => SYS_CALL_NUM + 1,
+        }
+    }
+
+    fn record(&mut self, syscall_id: usize) {
+        let index = Self::syscall_id_to_index(syscall_id);
+        self.record[index] += 1;
+    }
+
+    fn count(&self, syscall_id: usize) -> usize {
+        let index = Self::syscall_id_to_index(syscall_id);
+        self.record[index]
+    }
 }
 
 lazy_static! {
@@ -59,11 +96,14 @@ lazy_static! {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
         }
+
+        let records = [SyscallRecord::new(); MAX_APP_NUM];
         TaskManager {
             num_app,
             inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
+                    records,
                     current_task: 0,
                 })
             },
@@ -134,6 +174,19 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
+    }
+
+    /// add syscall record for current task
+    pub fn record_for_current(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.records[current_task].record(syscall_id);
+    }
+
+    /// get syscall record for current task
+    pub fn get_current_syscall_cnt(&self, syscall_id: usize) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.records[inner.current_task].count(syscall_id)
     }
 }
 
