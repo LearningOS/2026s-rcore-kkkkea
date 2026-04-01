@@ -77,11 +77,19 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
 
     match _trace_request {
         0 | 1 => {
+            if !VirtAddr::vaild_addr(_id) {
+                return -1;
+            }
+
             let page_table = PageTable::from_token(current_user_token());
             let va = VirtAddr::from(_id);
             let page_offset = va.page_offset();
             let vpn = va.floor();
-            let pte = page_table.translate(vpn).unwrap();
+            let pte = page_table.translate(vpn);
+            if pte.is_none() {
+                return -1;
+            }
+            let pte = pte.unwrap();
             if !pte.is_valid() {
                 return -1;
             }

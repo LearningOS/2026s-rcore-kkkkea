@@ -113,6 +113,12 @@ impl VirtAddr {
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
+
+    /// judge va is a iegal virtual address
+    pub fn vaild_addr(va: usize) -> bool {
+        let upper = va >> 39;
+        upper == 0 || upper == (!0usize >> 39)
+    }
 }
 impl From<VirtAddr> for VirtPageNum {
     fn from(v: VirtAddr) -> Self {
