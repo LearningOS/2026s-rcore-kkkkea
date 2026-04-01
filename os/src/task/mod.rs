@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -114,6 +115,36 @@ impl TaskManager {
             .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
     }
 
+    /// update syscall record for current task
+    fn update_current_record(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].update_record(syscall_id);
+    }
+
+    /// get syscall record for current task
+    fn get_current_record(&self, syscall_id: usize) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_record(syscall_id)
+    }
+
+    fn map_user_space_for_current(
+        &self,
+        va_start: VirtAddr,
+        va_end: VirtAddr,
+        map_perm: MapPermission,
+    ) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].map_user_space(va_start, va_end, map_perm)
+    }
+
+    fn unmap_user_space_for_current(&self, va_start: VirtAddr, va_end: VirtAddr) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].unmap_user_space(va_start, va_end)
+    }
+
     /// Get the current 'Running' task's token.
     fn get_current_token(&self) -> usize {
         let inner = self.inner.exclusive_access();
@@ -186,6 +217,30 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+/// update current syscall record
+pub fn update_current_record(syscall_id: usize) {
+    TASK_MANAGER.update_current_record(syscall_id);
+}
+
+/// get current syscall record
+pub fn get_current_record(syscall_id: usize) -> usize {
+    TASK_MANAGER.get_current_record(syscall_id)
+}
+
+/// map user space for current task
+pub fn map_user_space_for_current(
+    va_start: VirtAddr,
+    va_end: VirtAddr,
+    map_perm: MapPermission,
+) -> isize {
+    TASK_MANAGER.map_user_space_for_current(va_start, va_end, map_perm)
+}
+
+/// unmap user space for current task
+pub fn unmap_user_space_for_current(va_start: VirtAddr, va_end: VirtAddr) -> isize {
+    TASK_MANAGER.unmap_user_space_for_current(va_start, va_end)
 }
 
 /// Get the current 'Running' task's token.

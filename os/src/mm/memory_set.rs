@@ -37,6 +37,7 @@ lazy_static! {
 pub struct MemorySet {
     page_table: PageTable,
     areas: Vec<MapArea>,
+    user_areas: UserMapArea,
 }
 
 impl MemorySet {
@@ -45,6 +46,7 @@ impl MemorySet {
         Self {
             page_table: PageTable::new(),
             areas: Vec::new(),
+            user_areas: UserMapArea::new(),
         }
     }
     /// Get the page table token
@@ -70,6 +72,41 @@ impl MemorySet {
         }
         self.areas.push(map_area);
     }
+
+    /// map user space
+    pub fn map_user_space(
+        &mut self,
+        va_start: VirtAddr,
+        va_end: VirtAddr,
+        map_perm: MapPermission,
+    ) -> isize {
+        let vpn_range = VPNRange::new(va_start.floor(), va_end.ceil());
+        for vpn in vpn_range {
+            let pte = self.page_table.translate(vpn).unwrap();
+            if pte.is_valid() {
+                return -1;
+            }
+        }
+
+        self.user_areas
+            .map(va_start, va_end, &mut self.page_table, map_perm);
+        0
+    }
+    /// unmap user space
+    pub fn unmap_user_space(&mut self, va_start: VirtAddr, va_end: VirtAddr) -> isize {
+        let vpn_range = VPNRange::new(va_start.floor(), va_end.ceil());
+        for vpn in vpn_range {
+            let pte = self.page_table.translate(vpn).unwrap();
+            if !pte.is_valid() {
+                return -1;
+            }
+        }
+
+        self.user_areas
+            .unmap(va_start, va_end, &mut self.page_table);
+        0
+    }
+
     /// Mention that trampoline is not collected by areas.
     fn map_trampoline(&mut self) {
         self.page_table.map(
@@ -263,6 +300,59 @@ impl MemorySet {
         }
     }
 }
+
+pub struct UserMapArea {
+    data_frames: BTreeMap<VirtPageNum, FrameTracker>,
+}
+
+impl UserMapArea {
+    pub fn new() -> UserMapArea {
+        UserMapArea {
+            data_frames: BTreeMap::new(),
+        }
+    }
+
+    pub fn map_one(
+        &mut self,
+        page_table: &mut PageTable,
+        vpn: VirtPageNum,
+        map_perm: MapPermission,
+    ) {
+        let frame = frame_alloc().unwrap();
+        let ppn = frame.ppn;
+        self.data_frames.insert(vpn, frame);
+
+        let flags = PTEFlags::from_bits((map_perm | MapPermission::U).bits).unwrap();
+
+        page_table.map(vpn, ppn, flags);
+    }
+
+    pub fn map(
+        &mut self,
+        va_start: VirtAddr,
+        va_end: VirtAddr,
+        page_table: &mut PageTable,
+        map_perm: MapPermission,
+    ) {
+        let vpn_range = VPNRange::new(va_start.floor(), va_end.ceil());
+        for vpn in vpn_range {
+            self.map_one(page_table, vpn, map_perm);
+        }
+    }
+
+    pub fn unmap_one(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
+        self.data_frames.remove(&vpn);
+        page_table.unmap(vpn);
+    }
+
+    pub fn unmap(&mut self, va_start: VirtAddr, va_end: VirtAddr, page_table: &mut PageTable) {
+        let vpn_range = VPNRange::new(va_start.floor(), va_end.ceil());
+        for vpn in vpn_range {
+            self.unmap_one(vpn, page_table);
+        }
+    }
+}
+
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
     vpn_range: VPNRange,
@@ -361,7 +451,10 @@ impl MapArea {
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// map type for memory set: identical or framed
 pub enum MapType {
+    /// Identical map
     Identical,
+
+    /// Framed map
     Framed,
 }
 

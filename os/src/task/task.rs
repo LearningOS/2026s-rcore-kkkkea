@@ -1,10 +1,12 @@
 //! Types related to task management
 use super::TaskContext;
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
+use crate::syscall::syscall_id_to_order;
 use crate::trap::{trap_handler, TrapContext};
+use alloc::vec::Vec;
 
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
@@ -28,6 +30,9 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// sycall record
+    syscall_record: SyscallRecord,
 }
 
 impl TaskControlBlock {
@@ -35,10 +40,27 @@ impl TaskControlBlock {
     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
         self.trap_cx_ppn.get_mut()
     }
+
     /// get the user token
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
     }
+
+    /// map user space
+    pub fn map_user_space(
+        &mut self,
+        va_start: VirtAddr,
+        va_end: VirtAddr,
+        map_perm: MapPermission,
+    ) -> isize {
+        self.memory_set.map_user_space(va_start, va_end, map_perm)
+    }
+
+    /// unmap user space
+    pub fn unmap_user_space(&mut self, va_start: VirtAddr, va_end: VirtAddr) -> isize {
+        self.memory_set.unmap_user_space(va_start, va_end)
+    }
+
     /// Based on the elf info in program, build the contents of task in a new address space
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -63,6 +85,7 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            syscall_record: SyscallRecord::new(),
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();
@@ -96,6 +119,16 @@ impl TaskControlBlock {
             None
         }
     }
+
+    /// update record
+    pub fn update_record(&mut self, syscall_id: usize) {
+        self.syscall_record.update(syscall_id);
+    }
+
+    /// get record
+    pub fn get_record(&self, syscall_id: usize) -> usize {
+        self.syscall_record.get_record(syscall_id)
+    }
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -109,4 +142,25 @@ pub enum TaskStatus {
     Running,
     /// exited
     Exited,
+}
+
+struct SyscallRecord {
+    record: Vec<usize>,
+}
+
+impl SyscallRecord {
+    fn new() -> Self {
+        let mut record = Vec::with_capacity(MAX_SYSCALL_NUM + 1);
+        record.resize(MAX_SYSCALL_NUM + 1, 0);
+        Self { record }
+    }
+
+    pub fn update(&mut self, syscall_id: usize) {
+        let index = syscall_id_to_order(syscall_id);
+        self.record[index] += 1;
+    }
+
+    pub fn get_record(&self, syscall_id: usize) -> usize {
+        self.record[syscall_id_to_order(syscall_id)]
+    }
 }

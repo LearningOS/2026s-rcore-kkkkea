@@ -27,7 +27,7 @@ bitflags! {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 #[repr(C)]
 /// page table entry structure
 pub struct PageTableEntry {
