@@ -82,9 +82,11 @@ impl MemorySet {
     ) -> isize {
         let vpn_range = VPNRange::new(va_start.floor(), va_end.ceil());
         for vpn in vpn_range {
-            let pte = self.page_table.translate(vpn).unwrap();
-            if pte.is_valid() {
-                return -1;
+            let pte = self.page_table.translate(vpn);
+            if let Some(entry) = pte {
+                if entry.is_valid() {
+                    return -1;
+                }
             }
         }
 
@@ -96,8 +98,8 @@ impl MemorySet {
     pub fn unmap_user_space(&mut self, va_start: VirtAddr, va_end: VirtAddr) -> isize {
         let vpn_range = VPNRange::new(va_start.floor(), va_end.ceil());
         for vpn in vpn_range {
-            let pte = self.page_table.translate(vpn).unwrap();
-            if !pte.is_valid() {
+            let pte = self.page_table.translate(vpn);
+            if pte.is_none() || !pte.unwrap().is_valid() {
                 return -1;
             }
         }
