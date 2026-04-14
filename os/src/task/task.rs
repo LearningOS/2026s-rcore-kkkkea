@@ -60,6 +60,12 @@ pub struct TaskControlBlockInner {
     /// A vector containing TCBs of all child processes of the current process
     pub children: Vec<Arc<TaskControlBlock>>,
 
+    /// stride
+    pub stride: usize,
+
+    /// priority
+    pub priority: u16,
+
     /// It is set when active exit or execution error occurs
     pub exit_code: i32,
 
@@ -115,6 +121,8 @@ impl TaskControlBlock {
                     memory_set,
                     parent: None,
                     children: Vec::new(),
+                    stride: 0,
+                    priority: 6,
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
@@ -188,6 +196,8 @@ impl TaskControlBlock {
                     memory_set,
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
+                    stride: parent_inner.stride,
+                    priority: parent_inner.priority,
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,

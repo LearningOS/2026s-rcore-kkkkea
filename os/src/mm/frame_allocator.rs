@@ -116,6 +116,12 @@ pub fn frame_dealloc(ppn: PhysPageNum) {
     FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
 }
 
+/// return reamin physical page number
+pub fn remain_page_num() -> usize {
+    let inner = FRAME_ALLOCATOR.exclusive_access();
+    inner.end - inner.current + inner.recycled.len()
+}
+
 #[allow(unused)]
 /// a simple test for frame allocator
 pub fn frame_allocator_test() {
