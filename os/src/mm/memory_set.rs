@@ -96,6 +96,34 @@ impl MemorySet {
             self.areas.remove(idx);
         }
     }
+
+    /// remove a area with check
+    pub fn remove_area_with_start_vpn_checked(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+    ) -> isize {
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+
+        let vpn_range = VPNRange::new(start_vpn, end_vpn);
+        for vpn in vpn_range {
+            if !self.page_table.is_mapped(vpn) {
+                return -1;
+            }
+        }
+
+        if let Some((idx, area)) = self.areas.iter_mut().enumerate().find(|(_, area)| {
+            area.vpn_range.get_start() == start_vpn && area.vpn_range.get_end() == end_vpn
+        }) {
+            area.unmap(&mut self.page_table);
+            self.areas.remove(idx);
+            0
+        } else {
+            -1
+        }
+    }
+
     /// Add a new MapArea into this MemorySet.
     /// Assuming that there are no conflicts in the virtual address
     /// space.

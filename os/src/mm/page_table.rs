@@ -110,7 +110,8 @@ impl PageTable {
 
     /// return vpn is mapped
     pub fn is_mapped(&self, vpn: VirtPageNum) -> bool {
-        self.find_pte(vpn).is_some()
+        let pte = self.find_pte(vpn);
+        pte.map_or(false, |p| p.is_valid())
     }
 
     /// Find PageTableEntry by VirtPageNum

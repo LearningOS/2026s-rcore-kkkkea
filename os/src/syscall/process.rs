@@ -147,7 +147,7 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
         return -1;
     }
 
-    let require_page_num = end_va.ceil().0 - start_va.floor().0 + 1;
+    let require_page_num = end_va.ceil().0 - start_va.floor().0;
     if require_page_num > remain_page_num() {
         -1
     } else {
@@ -159,8 +159,7 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
                 start_va,
                 end_va,
                 MapPermission::from_bits(((_port & 0xff) << 1) as u8).unwrap() | MapPermission::U,
-            );
-        0
+            )
     }
 }
 
@@ -168,13 +167,15 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
     let start_va: VirtAddr = _start.into();
 
+    if !start_va.aligned() {
+        return -1;
+    }
+
     current_task()
         .unwrap()
         .inner_exclusive_access()
         .memory_set
-        .remove_area_with_start_vpn(start_va.into());
-
-    0
+        .remove_area_with_start_vpn_checked(_start.into(), (_start + _len).into())
 }
 
 /// change data segment size
