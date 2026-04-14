@@ -1,5 +1,6 @@
 //!Implementation of [`TaskManager`]
 use super::TaskControlBlock;
+use crate::config::BIG_STRIDE;
 use crate::sync::UPSafeCell;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
@@ -40,7 +41,8 @@ impl TaskManager {
 
         let ready_tcb = self.ready_queue.remove(min_stride_idx).unwrap();
         let mut ready_tcb_inner = ready_tcb.inner_exclusive_access();
-        ready_tcb_inner.stride += usize::MAX / ready_tcb_inner.priority as usize;
+        let pass = BIG_STRIDE / ready_tcb_inner.priority as usize;
+        ready_tcb_inner.stride += pass;
         drop(ready_tcb_inner);
 
         Some(ready_tcb)

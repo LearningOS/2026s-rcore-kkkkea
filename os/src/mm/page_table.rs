@@ -107,6 +107,12 @@ impl PageTable {
         }
         result
     }
+
+    /// return vpn is mapped
+    pub fn is_mapped(&self, vpn: VirtPageNum) -> bool {
+        self.find_pte(vpn).is_some()
+    }
+
     /// Find PageTableEntry by VirtPageNum
     fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();

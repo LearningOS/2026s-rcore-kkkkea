@@ -155,7 +155,7 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
             .unwrap()
             .inner_exclusive_access()
             .memory_set
-            .insert_framed_area(
+            .insert_framed_area_checked(
                 start_va,
                 end_va,
                 MapPermission::from_bits(((_port & 0xff) << 1) as u8).unwrap() | MapPermission::U,

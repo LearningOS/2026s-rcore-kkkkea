@@ -60,6 +60,30 @@ impl MemorySet {
             None,
         );
     }
+
+    /// check vaild berfore insert
+    pub fn insert_framed_area_checked(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+    ) -> isize {
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+
+        for vpn in vpn_range {
+            if self.page_table.is_mapped(vpn) {
+                return -1;
+            }
+        }
+
+        self.push(
+            MapArea::new(start_va, end_va, MapType::Framed, permission),
+            None,
+        );
+
+        0
+    }
+
     /// remove a area
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
         if let Some((idx, area)) = self
